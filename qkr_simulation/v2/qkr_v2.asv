@@ -1,0 +1,54 @@
+close all; clear;
+%% Define physical constants
+amu=1.66E-27;       % 1 AMU
+m=7*amu;            % Lithium mass
+lambda=1064E-9;     % Wavelength of light
+h=6.626E-34;        % Planck's Const.
+kL=2*pi/lambda;     % Wave Vector
+hbar=h/(2*pi);        % Reduced planck's constant
+Er=hbar^2*kL^2/(2*m); % Recoil Energy
+wr = Er/hbar; colororder(lbmap(4,'RedBlue'));
+%% Initialize parameters
+kicks = 400;  %number of kicks
+tau = .1E-6;  %time of pulse
+T = .8E-6;     %period on pulse generator, time between kicks is T-tau
+nk = 1001;     %number of plane wave states/bands considered
+V = 1000;       %lattice depth in recoils
+sk = 2.; %momentum width in units of 2kL
+k0 = -3*sk:sk/100:3*sk; k0=0;  %various initial momenta
+kbar = 8*wr*T;    %qkr parameters
+talbot = pi/(2*wr);
+K = 2*kL^2*T*V*Er*tau/m;
+D = K^2/4 * (1-2*besselj(2,K)+2*besselj(2,K)^2);
+tL = D/kbar^2;
+K = 11.6023; kbar = 1;
+D = K^2/4 * (1-2*besselj(2,K)+2*besselj(2,K)^2);
+tL = D/kbar^2;
+
+%
+tic
+Ufunc = @(delta,n) ((-1i).^(delta)).*besselj(delta,K/kbar).*exp(-1i*kbar*n.^2/2);
+psquare = zeros(length(k0),kicks+1);
+weight = exp(- k0.^2/(2*sk^2)); weight = weight/sum(weight);
+parfor jj = 1:length(k0)
+    n=(-(nk-1)/2:1:(nk-1)/2)+k0(jj); nmat = repmat(n,nk,1);
+    Tmat = kbar^2*n.^2/2; Kickmat = sparse(1:nk-1,2:nk,K/2,nk,nk)+sparse(2:nk,1:nk-1,K/2,nk,nk);
+    Ukick = expm(-1i*full(Kickmat)/kbar);
+    Ufree = diag(exp(-1i*Tmat/kbar));
+    propagate = Ufree*Ukick;
+    c = zeros(nk,kicks+1); c((nk+1)/2,1)=1;
+    for ii = 1:kicks
+        cii = propagate*c(:,ii);
+        c(:,ii+1) = cii/norm(cii);
+    end
+    probs = conj(c).*c;
+    psquare(jj,:) = (n.^2)*probs;
+end
+toc
+etot = weight*psquare;
+plot(0:1:kicks,etot,'.k','MarkerSize',15); hold on;
+% plot(0:1:kicks,etot/2,'b-','Linewidth',2.5); hold on;
+plot([0 50],[0 50]*2*D/kbar^2,'-b');
+ylim([0 1.2*max(etot)]);
+ylabel('$\langle (p/2\hbar k_L)^2 \rangle$','interpreter','latex'); xlabel('Kicks');
+
